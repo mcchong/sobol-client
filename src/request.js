@@ -8,14 +8,15 @@ class Request {
    * @param {string} token
    * @returns {object} this
    */
-  constructor(endpoint, headers = {}, token) {
-    if (!endpoint) throw new Error('Request requires an `endpoint`.');
-    this._endpoint = endpoint;
-    this._headers = headers;
-
-    if (token) {
-      this.setToken(token);
+  init(params) {
+    if (typeof params.endpoint === 'undefined') {
+      throw new Error('Missing Param: Request requires an "endpoint" param.');
     }
+    this._endpoint = params.endpoint;
+    this._headers = params.headers || {};
+
+    if (params.token) this.setToken(params.token);
+    if (params.errorHandler) this.setErrorHandler(params.errorHandler);
 
     return this;
   }
@@ -23,10 +24,10 @@ class Request {
   /**
    * Throws all request errors
    * @param {object} error
-   * @returns {void}
+   * @returns {object} error
    */
   _handleError(error) {
-    throw error;
+    return Promise.reject(error);
   }
 
   /**
@@ -36,11 +37,19 @@ class Request {
    */
   setToken(token) {
     const Authorization = (token ? `Bearer ${token}` : 'None');
-    this._token = token;
     this._headers = {
       ...this._headers,
       Authorization,
     };
+  }
+
+  /**
+   * Sets the error handler
+   * @param {funciton} handler
+   * @returns {void}
+   */
+  setErrorHandler(handler) {
+    if (handler) this._handleError = handler;
   }
 
   /**
@@ -90,4 +99,4 @@ class Request {
   }
 }
 
-module.exports = Request;
+module.exports = new Request();

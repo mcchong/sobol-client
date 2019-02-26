@@ -26,7 +26,10 @@ const SobolClient = require('sobol-client');
 API access is granted with the use of [API Keys](docs/keys.md) as follows:
 
 ```javascript
-SobolClient.connect({
+const Client = require('sobol-client');
+
+Client.connect({
+  auth: require('sobol-client/auth/rsa'),
   key: {
     private: 'LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUpR...',
     kid: '_SkDk2GrZ',

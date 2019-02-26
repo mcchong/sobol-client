@@ -1,6 +1,7 @@
 /* eslint no-console: 0 */
 
 const SobolApi = require('../src/index');
+const SobolRsaAuth = require('../src/auth/rsa');
 const SobolClient = require('../src/client');
 
 // KEYS
@@ -19,11 +20,13 @@ SobolApi.connect({
   key: key1,
   protocol: 'http',
   host: 'localhost',
+  auth: SobolRsaAuth,
 })
   .then((client) => {
     const { user } = client.getSession();
     const { Users } = client;
-    Users.find()
+
+    return Users.find()
       .then((res) => {
         const users = res.data;
 
@@ -59,10 +62,11 @@ Client.connect({
   key: key1,
   protocol: 'http',
   host: 'localhost',
+  auth: SobolRsaAuth,
 })
   .then((client) => {
     const { Applications } = client;
-    Applications.find()
+    return Applications.find()
       .then((res) => {
         console.log('Applications:', res.data);
         client.disconnect();
@@ -75,6 +79,7 @@ SobolApi.connect({
   key: key1,
   protocol: 'http',
   host: 'localhost',
+  auth: SobolRsaAuth,
 })
   .then((client) => {
     const clientJwt = client.getSession().jwt;

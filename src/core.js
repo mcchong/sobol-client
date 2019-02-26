@@ -1,6 +1,6 @@
-const Auth = require('./auth');
-const Request = require('./request');
-const pkg = require('../package.json');
+const request = require('./request');
+const auth = require('./auth');
+const { name, version } = require('../package.json');
 
 class Core {
   /**
@@ -9,69 +9,84 @@ class Core {
    */
   constructor() {
     this._pkg = {
-      name: pkg.name,
-      version: pkg.version,
+      name,
+      version,
     };
 
     return this;
   }
 
   /**
-   * Authenticates key and issues a new session
+   * Issues a new session and sets the org and token ids
    * @param {string | object} key
    * @returns {object} this
    */
   _authenticate(key) {
-    return this._auth.authenticate(key)
+    return auth.authenticate(key)
       .then((session) => {
-        this._session = session;
-
-        // handle orgIds
-        // - if there is one, use it
-        // - if there are multiple, enforce this._orgId
-        if (session.orgIds.length === 1) {
-          this.setOrg(session.orgIds[0]);
-        } else if (!session.orgIds.includes(this._orgId)) {
-          throw new Error(`Invalid Param: ${this._pkg.name} requires a valid "orgId".`);
-        }
-        this.setToken(session.jwt);
+        this._handleOrgs(session.orgIds);
+        request.setToken(session.jwt);
         return this;
       });
   }
 
   /**
    * Creates a new session
+   *
    * @param {object} params
+   *
+   * {
+   *   key: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUpR...,
+   *   protocol: 'http',
+   *   host: 'localhost',
+   *   namespace: 'api',
+   *   version: 'v1',
+   *   endpoint: 'http://localhost/api/v1/',
+   *   auth: AuthStrategy,
+   *   authOptions: {
+   *     ...
+   *   },
+   *   requestErrorHandler: SomeHandler,
+   * }
+   *
    * @returns {promise} client
    */
   connect(params) {
     return new Promise((resolve) => {
       if (typeof params.key === 'undefined') {
-        throw new Error(`Invalid Param: ${this._pkg.name} requires a "key".`);
+        throw new Error(`Missing Param: ${this._pkg.name} "connect()" requires a "key" param.`);
       }
 
-      if (typeof params.key !== 'string') {
-        if (typeof params.key.kid === 'undefined' || typeof params.key.private === 'undefined') {
-          throw new Error(`Invalid Params: ${this._pkg.name} RSA auth requires a "key.kid" and a "key.private".`);
-        }
-      }
-
-      // properties
+      // set properties
       this._key = params.key;
       this._protocol = params.protocol || 'https';
       this._host = params.host || 'sobol.io/d';
       this._namespace = params.namespace || 'api';
       this._version = params.version || 'v1';
       this._endpoint = params.endpoint || `${this._protocol}://${this._host}/${this._namespace}/${this._version}`;
+      this._headers = params.headers || {};
+      this._authOptions = params.authOptions || {};
 
-      // setters
+      // set the organization
       this.setOrg(params.orgId);
 
-      // libaries
-      this._request = new Request(this._endpoint);
-      this._auth = new Auth(this._endpoint);
+      // set request object
+      this._request = request.init({
+        endpoint: this._endpoint,
+        headers: this._headers,
+        errorHandler: params.requestErrorHandler || null,
+      });
 
-      // authenticate
+      // set auth strategy
+      this._auth = auth.init({
+        strategy: params.auth,
+        strategyOptions: {
+          ...this._authOptions,
+          pkg: this._pkg, // pass the package details for use in the strategies
+          request, // pass the request object for use in the strategies
+        },
+      });
+
       resolve(this._authenticate(this._key));
     });
   }
@@ -81,11 +96,10 @@ class Core {
    * @returns {object} this
    */
   disconnect() {
+    auth.deauthenticate();
+    request.setToken(null);
     this.setKey(null);
-    this.setToken(null);
     this.setOrg(null);
-    this._auth.deauthenticate();
-    this._session = null;
     return this;
   }
 
@@ -109,9 +123,24 @@ class Core {
    * @returns {void}
    */
   setToken(token) {
-    this._token = token;
-    this._request.setToken(token);
-    if (this._session) this._session.jwt = token;
+    auth.setToken(token);
+    request.setToken(token);
+  }
+
+  /**
+   * Sets a new org ID from a list of orgs
+   * - if there is one, use it
+   * - if there are multiple, enforce this._orgId
+   *
+   * @param {array} orgIds
+   * @returns {void}
+   */
+  _handleOrgs(orgIds) {
+    if (orgIds.length === 1) {
+      this.setOrg(orgIds[0]);
+    } else if (!orgIds.includes(this._orgId)) {
+      throw new Error(`Invalid Param: ${this._pkg.name} requires a valid "orgId" param.`);
+    }
   }
 
   /**
@@ -129,7 +158,7 @@ class Core {
    * @returns {object} session
    */
   getSession() {
-    return this._session;
+    return auth.getSession();
   }
 
   /**
